@@ -1,33 +1,35 @@
-#!/bin/bash
-#SBATCH --job-name=blastx
-#SBATCH -N 1
-#SBATCH -n 1
-#SBATCH -c 20
-#SBATCH --partition=general
-#SBATCH --qos=general
-#SBATCH --mail-type=END
-#SBATCH --mem=30G
-#SBATCH --mail-user=jason.vailionis@uconn.edu
-#SBATCH -o myscript_%j.out
-#SBATCH -e myscript_%j.err
+library(ggtree)
+library(ape)
+library(ggplot2)
 
-echo $(hostname)
-date
+tree <- read.tree("~/Cicadoidea/ERIC_R_TREE/example.tre")
+metadata <- read.csv("~/Cicadoidea/ERIC_R_TREE/Cicadaclass.csv")
 
-module load blast
 
-laopath="/home/FCAM/egordon/genomes/Laodelphax/Laoproteome.fasta"
-nilapath="/home/FCAM/egordon/genomes/AHEloci/Nilproteome.fasta"
+## Input "phylo" tree object
+## Input metadata in a dataframe where first column is tip names and second column is clade names
+get_clade_nodes <- function(phy_tree, metadata_df) {
+  groups <- levels(as.factor(metadata_df[[2]]))
+  
+  out <- sapply(groups, function(x){
+    names <- as.character(metadata_df[[1]][which(x == metadata_df[2])])
+    if (length(names) == 1){
+      return(which(names == phy_tree$tip.label))
+    } else {
+      return(getMRCA(phy_tree, names))
+    }
+  })
+  names(out) <- groups
+  return(out)
+}
 
-mkdir to_laoprot
-mkdir to_nilaprot
+get_clade_nodes(tree, metadata)
+z <- get_clade_nodes(tree, metadata)
 
-for x in *_subset.fasta; do
-        blastx -query $x -db $laopath -num_threads 20 -outfmt 6 -out ./to_laoprot/"$x".res
-        sort -u -k1,1 ./to_laoprot/"$x".res > ./to_laoprot/"$x"_tophits.res
-done
-
-for x in *_subset.fasta; do
-        blastx -query $x -db $nilapath -num_threads 20 -outfmt 6 -out ./to_nilaprot/"$x".res
-        sort -u -k1,1 ./to_nilaprot/"$x".res > ./to_nilaprot/"$x"_tophits.res
-done
+g <- ggtree(tree)
+g + 
+  geom_tiplab(size=2) + 
+  geom_hilight(node = z[3], extendto = 7) + 
+  geom_hilight(node = 69, extendto = 7, aes(fill = "green"), alpha = 0.1) +
+  geom_hilight(node = z['Cicadinae'], extendto = 7, aes(fill = "lightsalmon3"), alpha = 0.1) +
+  geom_cladelabel(node = z[1], label = 'italic(\'test-test-"test"\')~plain(\'"testy"\')', parse = TRUE, align = T, offset = -0.5)
